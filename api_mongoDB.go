@@ -85,7 +85,6 @@ func GetUniqueIdentity() int32 {
 			counterData["count"] = 1
 			counterData["_id"] = "uniqueIdentity"
 			counterCollection.InsertOne(context.TODO(), counterData)
-			
 			continue
 		} else {
 			data := bson.M{}
@@ -111,19 +110,42 @@ func GetOneCustomDataStructure(collName string, filter bson.M) (bson.M, error) {
 	return result, err
 }
 
-func PutOneCustomDataStructure(collName string, filter bson.M, putData interface{}) bool {
+func PutOneCustomDataStructure(collName string, filter bson.M, putData interface{}) (bool, error) {
 	collection := Client.Database(dbName).Collection(collName)
 
-	var checkItem map[string] interface{}
+	var checkItem map[string]interface{}
 	collection.FindOne(context.TODO(), filter).Decode(&checkItem)
 
 	if checkItem == nil {
-		collection.InsertOne(context.TODO(), putData)
-		return false
+		_, err := collection.InsertOne(context.TODO(), putData)
+        if err != nil {
+            logger.MongoDBLog.Println("insert failed : ", err)
+            return false, err
+        }
+		return true, nil
 	} else {
 		collection.UpdateOne(context.TODO(), filter, bson.M{"$set": putData})
-		return true
+		return true, nil
 	}
+}
+
+func CreateIndex(collName string, keyField string) (bool, error) {
+	collection := Client.Database(dbName).Collection(collName)
+
+	index := mongo.IndexModel{
+		Keys:    bsonx.Doc{{Key: keyField, Value: bsonx.Int32(1)}},
+		Options: options.Index().SetUnique(true),
+	}
+
+	idx, err := collection.Indexes().CreateOne(context.Background(), index)
+	if err != nil {
+		logger.MongoDBLog.Error("Create Index failed : ", keyField, err)
+		return false, err
+	}
+
+    logger.MongoDBLog.Println("index : ", idx)
+
+	return true, nil
 }
 
 func PutOneWithTimeout(collName string, filter bson.M, putData map[string]interface{}, timeout int32, timeField string) bool {
