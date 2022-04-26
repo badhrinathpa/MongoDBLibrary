@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2021 Open Networking Foundation <info@opennetworking.org>
 //
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-License-Identifier: LicenseRef-ONF-Member-Only-1.0
+//
 
 package main
 
@@ -22,16 +22,17 @@ import (
 
 type Student struct {
 	//ID     		primitive.ObjectID 	`bson:"_id,omitempty"`
-	Name      string    `bson:"name,omitempty"`
-	Age       int       `bson:"age,omitempty"`
-	CreatedAt time.Time `bson:"createdAt,omitempty"`
+	Name      	string				`bson:"name,omitempty"`
+	Age 	  	int 				`bson:"age,omitempty"`
+	Subject		string 				`bson:"subject,omitempty"`
+	CreatedAt 	time.Time			`bson:"createdAt,omitempty"`
 }
 
 func main() {
 	log.Println("dbtestapp started")
 
 	// connect to mongoDB
-	MongoDBLibrary.SetMongoDB("free5gc", "mongodb://mongodb:27017")
+	MongoDBLibrary.SetMongoDB("sdcore", "mongodb://mongodb:27017")
 
 	insertStudentInDB("Osman Amjad", 21)
 	insertStudentInDB("Osman Amjad", 21)
@@ -68,8 +69,81 @@ func main() {
 	uniqueId = MongoDBLibrary.GetUniqueIdentity()
 	log.Println(uniqueId)
 
-	uniqueId = MongoDBLibrary.GetUniqueIdentity()
+	uniqueId = MongoDBLibrary.GetUniqueIdentityWithinRange(3, 6)
 	log.Println(uniqueId)
+
+	uniqueId = MongoDBLibrary.GetUniqueIdentityWithinRange(3, 6)
+	log.Println(uniqueId)
+
+	log.Println("TESTING POOL OF IDS")
+
+	MongoDBLibrary.InitializePool("pool1", 10, 32)
+	
+	uniqueId, err = MongoDBLibrary.GetIDFromPool("pool1")
+	log.Println(uniqueId)
+
+	MongoDBLibrary.ReleaseIDToPool("pool1", uniqueId)
+
+	uniqueId, err = MongoDBLibrary.GetIDFromPool("pool1")
+	log.Println(uniqueId)
+
+	uniqueId, err = MongoDBLibrary.GetIDFromPool("pool1")
+	log.Println(uniqueId)
+
+	log.Println("TESTING INSERT APPROACH")
+	var randomId int32
+
+	randomId, err = MongoDBLibrary.GetIDFromInsertPool("insertApproach")
+	log.Println(randomId)
+	if (err != nil) {log.Println(err.Error())}
+
+	MongoDBLibrary.InitializeInsertPool("insertApproach", 0, 1000, 3)
+
+	randomId, err = MongoDBLibrary.GetIDFromInsertPool("insertApproach")
+	log.Println(randomId)
+	if (err != nil) {log.Println(err.Error())}
+
+	randomId, err = MongoDBLibrary.GetIDFromInsertPool("insertApproach")
+	log.Println(randomId)
+	if (err != nil) {log.Println(err.Error())}
+
+	MongoDBLibrary.ReleaseIDToInsertPool("insertApproach", randomId)
+
+	log.Println("TESTING RETRIES")
+
+	MongoDBLibrary.InitializeInsertPool("testRetry", 0, 6, 3)
+
+	randomId, err = MongoDBLibrary.GetIDFromInsertPool("testRetry")
+	log.Println(randomId)
+	if (err != nil) {log.Println(err.Error())}
+
+	randomId, err = MongoDBLibrary.GetIDFromInsertPool("testRetry")
+	log.Println(randomId)
+	if (err != nil) {log.Println(err.Error())}
+
+	log.Println("TESTING CHUNK APPROACH")
+	var lower int32
+	var upper int32
+
+	randomId, lower, upper, err = MongoDBLibrary.GetChunkFromPool("studentIdsChunkApproach")
+	log.Println(randomId, lower, upper)
+	if (err != nil) {log.Println(err.Error())}
+
+	MongoDBLibrary.InitializeChunkPool("studentIdsChunkApproach", 0, 1000, 5, 100) // min, max, retries, chunkSize
+
+	randomId, lower, upper, err = MongoDBLibrary.GetChunkFromPool("studentIdsChunkApproach")
+	log.Println(randomId, lower, upper)
+	if (err != nil) {log.Println(err.Error())}
+
+	randomId, lower, upper, err = MongoDBLibrary.GetChunkFromPool("studentIdsChunkApproach")
+	log.Println(randomId, lower, upper)
+	if (err != nil) {log.Println(err.Error())}
+
+	randomId, lower, upper, err = MongoDBLibrary.GetChunkFromPool("studentIdsChunkApproach")
+	log.Println(randomId, lower, upper)
+	if (err != nil) {log.Println(err.Error())}
+
+	MongoDBLibrary.ReleaseChunkToPool("studentIdsChunkApproach", randomId)
 
 	for {
 		time.Sleep(100 * time.Second)
@@ -104,7 +178,7 @@ func insertStudentInDB(name string, age int) {
         log.Println("put data failed : ", err)
         return
     }
-	_, err := MongoDBLibrary.CreateIndex("student", "Name")
+	_, err = MongoDBLibrary.CreateIndex("student", "Name")
 	if err != nil {
 		log.Println("Create index failed on Name field.")
 	}
