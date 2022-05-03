@@ -6,15 +6,14 @@
 package main
 
 import (
+	"context"
+	//"fmt"
 	"log"
 	"time"
-	//"context"
-	//"fmt"
 	//"os"
 
 	//"go.mongodb.org/mongo-driver/bson/primitive"
-	//"go.mongodb.org/mongo-driver/mongo"
-	//"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/mongo"
 
 	"github.com/omec-project/MongoDBLibrary"
 	"go.mongodb.org/mongo-driver/bson"
@@ -22,17 +21,30 @@ import (
 
 type Student struct {
 	//ID     		primitive.ObjectID 	`bson:"_id,omitempty"`
-	Name      	string				`bson:"name,omitempty"`
-	Age 	  	int 				`bson:"age,omitempty"`
-	Subject		string 				`bson:"subject,omitempty"`
-	CreatedAt 	time.Time			`bson:"createdAt,omitempty"`
+	Name       string                 `bson:"name,omitempty"`
+	Age        int                    `bson:"age,omitempty"`
+	Subject    string                 `bson:"subject,omitempty"`
+	CreatedAt  time.Time              `bson:"createdAt,omitempty"`
+	CustomInfo map[string]interface{} `bson:"customInfo,omitempty"`
+}
+
+func iterateChangeStream(routineCtx context.Context, stream *mongo.ChangeStream) {
+	log.Println("iterate change stream for timeout")
+	defer stream.Close(routineCtx)
+	for stream.Next(routineCtx) {
+		var data bson.M
+		if err := stream.Decode(&data); err != nil {
+			panic(err)
+		}
+		log.Println("iterate stream %v\n", data)
+	}
 }
 
 func main() {
 	log.Println("dbtestapp started")
 
 	// connect to mongoDB
-	MongoDBLibrary.SetMongoDB("sdcore", "mongodb://mongodb:27017")
+	MongoDBLibrary.SetMongoDB("sdcore", "mongodb://mongodb-headless:27017")
 
 	insertStudentInDB("Osman Amjad", 21)
 	insertStudentInDB("Osman Amjad", 21)
@@ -61,7 +73,21 @@ func main() {
 		log.Println("Error getting student: " + err.Error())
 	}
 
-	createDocumentWithTimeout()
+	log.Println("starting timeout document")
+	database := MongoDBLibrary.Client.Database("sdcore")
+	timeoutColl := database.Collection("timeout")
+	timeoutStream, err := timeoutColl.Watch(context.TODO(), mongo.Pipeline{})
+	if err != nil {
+		panic(err)
+	}
+	routineCtx, _ := context.WithCancel(context.Background())
+	go iterateChangeStream(routineCtx, timeoutStream)
+	createDocumentWithTimeout("yak1")
+	//createDocumentWithTimeout("yak2")
+	//log.Println("sleeping for 120 seconds")
+	//time.Sleep(120 * time.Second)
+	//updateDocumentWithTimeout("yak1")
+	//deleteDocumentWithTimeout("yak2")
 
 	uniqueId := MongoDBLibrary.GetUniqueIdentity()
 	log.Println(uniqueId)
@@ -78,7 +104,7 @@ func main() {
 	log.Println("TESTING POOL OF IDS")
 
 	MongoDBLibrary.InitializePool("pool1", 10, 32)
-	
+
 	uniqueId, err = MongoDBLibrary.GetIDFromPool("pool1")
 	log.Println(uniqueId)
 
@@ -95,17 +121,23 @@ func main() {
 
 	randomId, err = MongoDBLibrary.GetIDFromInsertPool("insertApproach")
 	log.Println(randomId)
-	if (err != nil) {log.Println(err.Error())}
+	if err != nil {
+		log.Println(err.Error())
+	}
 
 	MongoDBLibrary.InitializeInsertPool("insertApproach", 0, 1000, 3)
 
 	randomId, err = MongoDBLibrary.GetIDFromInsertPool("insertApproach")
 	log.Println(randomId)
-	if (err != nil) {log.Println(err.Error())}
+	if err != nil {
+		log.Println(err.Error())
+	}
 
 	randomId, err = MongoDBLibrary.GetIDFromInsertPool("insertApproach")
 	log.Println(randomId)
-	if (err != nil) {log.Println(err.Error())}
+	if err != nil {
+		log.Println(err.Error())
+	}
 
 	MongoDBLibrary.ReleaseIDToInsertPool("insertApproach", randomId)
 
@@ -115,11 +147,15 @@ func main() {
 
 	randomId, err = MongoDBLibrary.GetIDFromInsertPool("testRetry")
 	log.Println(randomId)
-	if (err != nil) {log.Println(err.Error())}
+	if err != nil {
+		log.Println(err.Error())
+	}
 
 	randomId, err = MongoDBLibrary.GetIDFromInsertPool("testRetry")
 	log.Println(randomId)
-	if (err != nil) {log.Println(err.Error())}
+	if err != nil {
+		log.Println(err.Error())
+	}
 
 	log.Println("TESTING CHUNK APPROACH")
 	var lower int32
@@ -127,21 +163,29 @@ func main() {
 
 	randomId, lower, upper, err = MongoDBLibrary.GetChunkFromPool("studentIdsChunkApproach")
 	log.Println(randomId, lower, upper)
-	if (err != nil) {log.Println(err.Error())}
+	if err != nil {
+		log.Println(err.Error())
+	}
 
 	MongoDBLibrary.InitializeChunkPool("studentIdsChunkApproach", 0, 1000, 5, 100) // min, max, retries, chunkSize
 
 	randomId, lower, upper, err = MongoDBLibrary.GetChunkFromPool("studentIdsChunkApproach")
 	log.Println(randomId, lower, upper)
-	if (err != nil) {log.Println(err.Error())}
+	if err != nil {
+		log.Println(err.Error())
+	}
 
 	randomId, lower, upper, err = MongoDBLibrary.GetChunkFromPool("studentIdsChunkApproach")
 	log.Println(randomId, lower, upper)
-	if (err != nil) {log.Println(err.Error())}
+	if err != nil {
+		log.Println(err.Error())
+	}
 
 	randomId, lower, upper, err = MongoDBLibrary.GetChunkFromPool("studentIdsChunkApproach")
 	log.Println(randomId, lower, upper)
-	if (err != nil) {log.Println(err.Error())}
+	if err != nil {
+		log.Println(err.Error())
+	}
 
 	MongoDBLibrary.ReleaseChunkToPool("studentIdsChunkApproach", randomId)
 
@@ -174,20 +218,35 @@ func insertStudentInDB(name string, age int) {
 	}
 	filter := bson.M{}
 	_, err := MongoDBLibrary.PutOneCustomDataStructure("student", filter, student)
-    if err != nil {
-        log.Println("put data failed : ", err)
-        return
-    }
+	if err != nil {
+		log.Println("put data failed : ", err)
+		return
+	}
 	_, err = MongoDBLibrary.CreateIndex("student", "Name")
 	if err != nil {
 		log.Println("Create index failed on Name field.")
 	}
 }
 
-func createDocumentWithTimeout() {
+func deleteDocumentWithTimeout(name string) {
 	putData := bson.M{}
-	putData["name"] = "Yak"
-	putData["createdAt"] = time.Now()
+	putData["name"] = name
 	filter := bson.M{}
-	MongoDBLibrary.PutOneWithTimeout("timeout", filter, putData, 120, "createdAt")
+	MongoDBLibrary.RestfulAPIDeleteOne("timeout", filter)
+}
+
+func createDocumentWithTimeout(name string) {
+	putData := bson.M{}
+	putData["name"] = name
+	putData["customInfo"] = bson.M{"updatedAt": interface{}(time.Now())}
+	filter := bson.M{"name": name}
+	MongoDBLibrary.RestfulAPIPutOneTimeout("timeout", filter, putData, 60, "customInfo")
+}
+
+func updateDocumentWithTimeout(name string) {
+	putData := bson.M{}
+	putData["name"] = name
+	putData["createdAt"] = time.Now()
+	filter := bson.M{"name": name}
+	MongoDBLibrary.RestfulAPIPatchOneTimeout("timeout", filter, putData, 200, "createdAt")
 }

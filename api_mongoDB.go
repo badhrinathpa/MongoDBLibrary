@@ -10,9 +10,11 @@ import (
 	"context"
 	"encoding/json"
 	"time"
+    "strings"
 	"errors"
 	"math/rand"
 	"os"
+    "fmt"
 
 	jsonpatch "github.com/evanphx/json-patch"
 	"go.mongodb.org/mongo-driver/bson"
@@ -416,12 +418,59 @@ func CreateIndex(collName string, keyField string) (bool, error) {
 	return true, nil
 }
 
-func PutOneWithTimeout(collName string, filter bson.M, putData map[string]interface{}, timeout int32, timeField string) bool {
+func RestfulAPIPatchOneTimeout(collName string, filter bson.M, putData map[string]interface{}, timeout int32, timeField string) bool {
 	collection := Client.Database(dbName).Collection(collName)
 	var checkItem map[string]interface{}
 
-	// TTL index
-	index := mongo.IndexModel{
+    cursor, err := collection.Indexes().List(context.TODO())
+
+    if err != nil {
+        logger.MongoDBLog.Fatal(err)
+    }
+
+    var result []bson.M
+    if err = cursor.All(context.TODO(), &result); err != nil {
+        logger.MongoDBLog.Fatal(err)
+    }
+
+    for _, v := range result {
+        for k1, v1 := range v {
+            valStr := fmt.Sprint(v1)
+            if (k1 == "name") && strings.Contains(valStr, timeField) {
+                _, err = collection.Indexes().DropOne(context.Background(), valStr)
+                if err != nil {
+                    logger.MongoDBLog.Panic(err)
+                }
+            }
+        }
+    }
+
+    index := mongo.IndexModel{
+		Keys:    bsonx.Doc{{Key: timeField, Value: bsonx.Int32(1)}},
+		Options: options.Index().SetExpireAfterSeconds(timeout),
+	}
+
+	_, err = collection.Indexes().CreateOne(context.Background(), index)
+	if err != nil {
+		logger.MongoDBLog.Panic(err)
+	}
+
+	collection.FindOne(context.TODO(), filter).Decode(&checkItem)
+
+	if checkItem == nil {
+		collection.InsertOne(context.TODO(), putData)
+		return false
+	} else {
+		collection.UpdateOne(context.TODO(), filter, bson.M{"$set": putData})
+		return true
+	}
+}
+
+func RestfulAPIPutOneTimeout(collName string, filter bson.M, putData map[string]interface{}, timeout int32, timeField string) bool {
+	collection := Client.Database(dbName).Collection(collName)
+	var checkItem map[string]interface{}
+
+    index := mongo.IndexModel{
 		Keys:    bsonx.Doc{{Key: timeField, Value: bsonx.Int32(1)}},
 		Options: options.Index().SetExpireAfterSeconds(timeout),
 	}
