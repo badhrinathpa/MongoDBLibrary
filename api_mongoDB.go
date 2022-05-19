@@ -653,13 +653,26 @@ func RestfulAPIPost(collName string, filter bson.M, postData map[string]interfac
 	collection := Client.Database(dbName).Collection(collName)
 
 	var checkItem map[string]interface{}
-	collection.FindOne(context.TODO(), filter).Decode(&checkItem)
+    err := collection.FindOne(context.TODO(), filter).Decode(&checkItem)
+    if err != nil {
+        logger.MongoDBLog.Println("item not found: ", err)
+    }
 
 	if checkItem == nil {
-		collection.InsertOne(context.TODO(), postData)
+		_, err := collection.InsertOne(context.TODO(), postData)
+        if err != nil {
+            logger.MongoDBLog.Println("insert failed : ", err)
+            return false
+        }
+        logger.MongoDBLog.Println("insert success : ", postData)
 		return false
 	} else {
-		collection.UpdateOne(context.TODO(), filter, bson.M{"$set": postData})
+		_, err := collection.UpdateOne(context.TODO(), filter, bson.M{"$set": postData})
+        if err != nil {
+            logger.MongoDBLog.Println("update failed : ", err)
+            return false
+        }
+        logger.MongoDBLog.Println("update success : ", postData)
 		return true
 	}
 }
